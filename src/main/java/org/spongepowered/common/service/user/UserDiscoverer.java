@@ -50,6 +50,12 @@ import org.spongepowered.common.world.WorldManager;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,7 +67,14 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.Nullable;
+
 class UserDiscoverer {
+
+    private static final Set<UUID> detectedStoredUUIDs = new HashSet<>();
+
+    @Nullable private static WatchService filesystemWatchService = null;
+    @Nullable private static WatchKey watchKey = null;
 
     private static final Cache<UUID, User> userCache = CacheBuilder.newBuilder()
             .expireAfterAccess(1, TimeUnit.DAYS)
@@ -162,7 +175,7 @@ class UserDiscoverer {
         return UserDiscoverer.findByProfile(profile);
     }
 
-    static Collection<org.spongepowered.api.profile.GameProfile> getAllProfiles() {
+    static synchronized Collection<org.spongepowered.api.profile.GameProfile> getAllProfiles() {
         Preconditions.checkState(Sponge.isServerAvailable(), "Server is not available!");
         final Map<UUID, org.spongepowered.api.profile.GameProfile> profiles = new HashMap<>();
 
@@ -171,27 +184,74 @@ class UserDiscoverer {
 
         // Add all known profiles from the data files
         SaveHandler saveHandler = (SaveHandler) WorldManager.getWorldByDimensionId(0).get().getSaveHandler();
-        String[] uuids = saveHandler.getAvailablePlayerDat();
         final PlayerProfileCache profileCache = SpongeImpl.getServer().getPlayerProfileCache();
-        for (String playerUuid : uuids) {
 
-            // If the filename contains a period, we can fail fast. Vanilla code fixes the Strings that have ".dat" to strip that out
-            // before passing that back in getAvailablePlayerDat. It doesn't remove non ".dat" filenames from the list.
-            if (playerUuid.contains(".")) {
-                continue;
+        if (filesystemWatchService == null || watchKey == null) {
+            String[] uuids = saveHandler.getAvailablePlayerDat();
+            for (String playerUuid : uuids) {
+
+                // If the filename contains a period, we can fail fast. Vanilla code fixes the Strings that have ".dat" to strip that out
+                // before passing that back in getAvailablePlayerDat. It doesn't remove non ".dat" filenames from the list.
+                if (playerUuid.contains(".")) {
+                    continue;
+                }
+
+                // At this point, we have a filename who has no extension. This doesn't mean it is actually a UUID. We trap the exception and ignore
+                // any filenames that fail the UUID check.
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(playerUuid);
+                } catch (Exception ex) {
+                    continue;
+                }
+
+                // it exists, so we make sure to remove the uuid from the map (it may have been added manually in the meantime)
+                nonExistentUsers.remove(uuid);
+                detectedStoredUUIDs.add(uuid);
             }
 
-            // At this point, we have a filename who has no extension. This doesn't mean it is actually a UUID. We trap the exception and ignore
-            // any filenames that fail the UUID check.
-            UUID uuid;
+            // Setup the watch service
             try {
-                uuid = UUID.fromString(playerUuid);
-            } catch (Exception ex) {
-                continue;
+                filesystemWatchService = FileSystems.getDefault().newWatchService();
+                watchKey = saveHandler.playersDirectory.toPath().register(
+                        filesystemWatchService,
+                        StandardWatchEventKinds.ENTRY_CREATE,
+                        StandardWatchEventKinds.ENTRY_DELETE
+                );
+            } catch (IOException e) {
+                SpongeImpl.getLogger().warn("Could not start file watcher");
             }
+        } else {
+            // We've already got the UUIDs, so we need to just see if the file system
+            // watcher has found any more (or removed any).
+            for (WatchEvent event : watchKey.pollEvents()) {
+                @SuppressWarnings("unchecked") WatchEvent<Path> ev = (WatchEvent<Path>) event;
+                WatchEvent.Kind<Path> kind = ev.kind();
 
-            // it exists, so we make sure to remove the uuid from the map (it may have been added manually in the meantime)
-            nonExistentUsers.remove(uuid);
+                Path file = ev.context();
+                String filename = file.getFileName().toString();
+                if (filename.endsWith(".dat")) {
+                    filename = filename.replace(".dat", "");
+                } else if (filename.contains(".")) {
+                    continue; // no point event trying
+                }
+
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(filename);
+                } catch (Exception ex) {
+                    continue;
+                }
+
+                if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
+                    detectedStoredUUIDs.add(uuid);
+                } else if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
+                    detectedStoredUUIDs.remove(uuid);
+                }
+            }
+        }
+
+        for (UUID uuid : detectedStoredUUIDs) {
             final GameProfile profile = profileCache.getProfileByUUID(uuid);
             if (profile != null) {
                 profiles.put(profile.getId(), (org.spongepowered.api.profile.GameProfile) profile);
