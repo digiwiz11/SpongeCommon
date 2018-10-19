@@ -233,7 +233,7 @@ class UserDiscoverer {
                 if (filename.endsWith(".dat")) {
                     filename = filename.replace(".dat", "");
                 } else if (filename.contains(".")) {
-                    continue; // no point event trying
+                    continue; // no point even trying
                 }
 
                 UUID uuid;
