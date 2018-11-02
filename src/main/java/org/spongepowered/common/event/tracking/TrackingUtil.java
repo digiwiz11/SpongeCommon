@@ -102,6 +102,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.annotation.Nullable;
 
@@ -442,7 +443,7 @@ public final class TrackingUtil {
     }
 
     public static boolean processBlockCaptures(List<BlockSnapshot> snapshots, IPhaseState<?> state, PhaseContext<?> context) {
-        return processBlockCaptures(snapshots, state, context, 0);
+        return processBlockCaptures(snapshots.stream(), state, context, 0);
     }
 
     /**
@@ -459,8 +460,8 @@ public final class TrackingUtil {
      * @return True if no events or transactions were cancelled
      */
     @SuppressWarnings({"unchecked", "ConstantConditions", "rawtypes"})
-    public static boolean processBlockCaptures(List<BlockSnapshot> snapshots, IPhaseState<?> state, PhaseContext<?> context, int currentDepth) {
-        if (snapshots.isEmpty()) {
+    public static boolean processBlockCaptures(Stream<BlockSnapshot> snapshots, IPhaseState<?> state, PhaseContext<?> context, int currentDepth) {
+        if (!snapshots.findFirst().isPresent()) {
             return false;
         }
         final List<ChangeBlockEvent> blockEvents = new ArrayList<>();
@@ -516,13 +517,13 @@ public final class TrackingUtil {
         }
     }
 
-    private static void createTransactionLists(List<BlockSnapshot> snapshots, ImmutableList<Transaction<BlockSnapshot>>[] transactionArrays,
+    private static void createTransactionLists(Stream<BlockSnapshot> snapshots, ImmutableList<Transaction<BlockSnapshot>>[] transactionArrays,
         ImmutableList.Builder<Transaction<BlockSnapshot>>[] transactionBuilders) {
-        for (BlockSnapshot snapshot : snapshots) {
+        snapshots.forEach(snapshot -> {
             // This processes each snapshot to assign them to the correct event in the next area, with the
             // correct builder array entry.
             TRANSACTION_PROCESSOR.apply(transactionBuilders).accept(TRANSACTION_CREATION.apply(snapshot));
-        }
+        });
         for (int i = 0; i < EVENT_COUNT; i++) {
             // Build each event array
             transactionArrays[i] = transactionBuilders[i].build();

@@ -170,19 +170,19 @@ class EntityTickPhaseState extends TickPhaseState<EntityTickContext> {
         // Would depend on whether entity captures are done.
         phaseContext.getBlockItemDropSupplier()
             .acceptAndClearIfNotEmpty(map -> {
-                final List<BlockSnapshot> capturedBlocks = phaseContext.getCapturedBlocks();
-                for (BlockSnapshot snapshot : capturedBlocks) {
-                    final BlockPos blockPos = VecHelper.toBlockPos(snapshot.getLocation().get());
-                    final Collection<EntityItem> entityItems = map.get(blockPos);
-                    if (!entityItems.isEmpty()) {
-                        frame.pushCause(snapshot);
-                        frame.addContext(EventContextKeys.SPAWN_TYPE, SpawnTypes.DROPPED_ITEM);
-                        final List<Entity> items = entityItems.stream().map(EntityUtil::fromNative).collect(Collectors.toList());
-                        SpongeCommonEventFactory.callDropItemDestruct(items, phaseContext);
+                phaseContext.getCapturedBlockSupplier().stream()
+                    .forEach(snapshot -> {
+                        final BlockPos blockPos = VecHelper.toBlockPos(snapshot.getLocation().get());
+                        final Collection<EntityItem> entityItems = map.get(blockPos);
+                        if (!entityItems.isEmpty()) {
+                            frame.pushCause(snapshot);
+                            frame.addContext(EventContextKeys.SPAWN_TYPE, SpawnTypes.DROPPED_ITEM);
+                            final List<Entity> items = entityItems.stream().map(EntityUtil::fromNative).collect(Collectors.toList());
+                            SpongeCommonEventFactory.callDropItemDestruct(items, phaseContext);
 
-                        frame.popCause();
-                    }
-                }
+                            frame.popCause();
+                        }
+                    });
 
             });
         phaseContext.getCapturedItemStackSupplier()

@@ -117,8 +117,7 @@ class BlockTickPhaseState extends LocationBasedTickPhaseState<BlockTickContext> 
     @Override
     public void postTrackBlock(BlockSnapshot snapshot, BlockTickContext context) {
         if (context.shouldProcessImmediately()) {
-            TrackingUtil.processBlockCaptures(context.getCapturedBlocks(), this, context);
-            context.getCapturedBlockSupplier().get().remove(snapshot);
+            context.getCapturedBlockSupplier().acceptAndClearIfNotEmpty(list -> TrackingUtil.processBlockCaptures(list, this, context);
         }
     }
 

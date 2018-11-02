@@ -405,7 +405,7 @@ public class PhaseContext<P extends PhaseContext<P>> implements AutoCloseable {
         return this.blocksSupplier.get();
     }
 
-    public CapturedSupplier<BlockSnapshot> getCapturedBlockSupplier() throws IllegalStateException {
+    public CapturedBlocksSupplier getCapturedBlockSupplier() throws IllegalStateException {
         if (this.blocksSupplier == null) {
             throw TrackingUtil.throwWithContext("Expected to be capturing blocks, but we're not capturing them!", this).get();
         }
