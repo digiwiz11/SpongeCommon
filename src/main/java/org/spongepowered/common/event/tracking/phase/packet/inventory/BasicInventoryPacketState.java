@@ -174,7 +174,7 @@ public class BasicInventoryPacketState extends PacketState<InventoryPacketContex
                 if (!mixinContainer.capturePossible()) {
                     // TODO When this happens a mod probably overrides Container#detectAndSendChanges
                     // We are currently unable to detect changes in this case.
-                    SpongeImpl.getLogger().info("Container was not captured. No ClickInventoryEvent will be fired! Container: " + openContainer.getClass() + " PacketState: " + this.getClass().getSimpleName());
+                    //SpongeImpl.getLogger().info("Container was not captured. No ClickInventoryEvent will be fired! Container: " + openContainer.getClass() + " PacketState: " + this.getClass().getSimpleName());
                     return;
                 }
                 // No SlotTransaction was captured. So we add the clicked slot as a transaction
