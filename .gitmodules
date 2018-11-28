@@ -1,4 +1,4 @@
 [submodule "SpongeAPI"]
 	path = SpongeAPI
 	url = https://github.com/digiwiz11/SpongeAPI.git
-	branch = bleeding
+	branch = hardrockrealms/atm3-remix-7.1.0
